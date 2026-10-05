@@ -713,8 +713,21 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js')
-          .then(reg => console.log('AegisVault ServiceWorker registered:', reg.scope))
+          .then(reg => {
+            console.log('AegisVault ServiceWorker registered:', reg.scope);
+            // Check for updates on load
+            reg.update();
+          })
           .catch(err => console.log('ServiceWorker registration error:', err));
+
+        // When a new service worker takes over, reload to apply the new app version
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
       });
     }
   </script>
