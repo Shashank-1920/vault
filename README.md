@@ -8,22 +8,27 @@ Built with **Zero-Knowledge Architecture** using the native **Web Crypto API**: 
 
 ## 🔒 Security & Cryptographic Specifications
 
-- **Key Derivation Function (KDF):** `PBKDF2` with `HMAC-SHA256` using **300,000 iterations** (compliant with OWASP recommendations) and a cryptographically secure random 16-byte salt (`window.crypto.getRandomValues`).
-- **Authenticated Encryption:** `AES-256-GCM` (Galois/Counter Mode) with unique 12-byte (96-bit) initialization vectors (IV) for every encryption operation. Decryption provides automatic tamper detection (authenticated ciphertext integrity).
-- **Zero-Knowledge Principle:** Plaintext passwords are only decrypted into memory during an active session and wiped completely when locked. No backend, no telemetry, no leaks.
+- **Dual-Envelope Key Architecture:**
+  - **Vault Master Key:** A cryptographically random 256-bit AES-GCM key generates all encryption operations for vault records.
+  - **Master PIN Protection:** The user sets a Master PIN (4 to 8 digits). A PIN key is derived using `PBKDF2` with `HMAC-SHA256` (**300,000 rounds** and 16-byte random salt). The Vault Master Key is wrapped (encrypted) with this PIN key.
+  - **Hardware Biometrics (WebAuthn):** On supported devices (iPhone Touch ID/Face ID, Android Fingerprint, Windows Hello), platform credentials wrap the Vault Master Key. Users can unlock the vault with 1 tap using their biometric sensor!
+- **Authenticated Encryption:** `AES-256-GCM` with unique 12-byte (96-bit) IVs for every encryption operation with automatic tamper detection.
+- **Zero-Knowledge Principle:** Plaintext passwords are only decrypted into memory during an active session and wiped completely when locked.
 - **Auto-Lock Security:** Configurable inactivity timer (1m, 5m, 15m, 30m) automatically wipes keys from memory and locks the UI.
 - **Clipboard Hygiene:** Passwords copied to your clipboard are automatically purged after 30 seconds to prevent background app snooping.
-- **Encrypted Portability:** Export and import tamper-resistant `.vault` encrypted JSON backups protected with your master password.
+- **Encrypted Portability:** Export and import tamper-resistant `.vault` encrypted JSON backups.
 
 ---
 
 ## 📱 Features
 
-1. **Mobile-First Experience**: Designed specifically for iPhone and Android touchscreens with safe-area notch awareness, bottom navigation, and smooth sheet modals.
-2. **Offline-First PWA**: Service Worker caching allows the app to work 100% offline without internet.
-3. **Password Health & Audit**: Real-time entropy evaluation, crack time estimation, and detection of weak or duplicated credentials.
-4. **Custom Password Generator**: High-entropy password generator with length options, character-set toggles, and ambiguous-character filtering.
-5. **Categorized Organization**: Logins, Payment Cards, Encrypted Notes, Wi-Fi keys, and Identity records with fast fuzzy search and favorites.
+1. **Biometric 1-Tap Unlock**: Touch ID, Face ID, Android Fingerprint, or Windows Hello.
+2. **Master PIN Fallback**: 4 to 8 digit Master PIN as your secure recovery foundation.
+3. **Mobile-First Experience**: Designed specifically for iPhone and Android touchscreens with safe-area notch awareness, bottom navigation, and smooth sheet modals.
+4. **Offline-First PWA**: Service Worker caching allows the app to work 100% offline without internet.
+5. **Password Health & Audit**: Real-time entropy evaluation, crack time estimation, and detection of weak or duplicated credentials.
+6. **Custom Password Generator**: High-entropy password generator with length options, character-set toggles, and ambiguous-character filtering.
+7. **Categorized Organization**: Logins, Payment Cards, Encrypted Notes, Wi-Fi keys, and Identity records with fast fuzzy search and favorites.
 
 ---
 

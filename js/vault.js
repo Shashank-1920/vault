@@ -1,13 +1,14 @@
 /**
  * AegisVault - Vault Data & State Manager
- * Handles zero-knowledge storage, in-memory lifecycle, and auto-lock security
+ * Zero-knowledge encryption backed by Master PIN and Hardware Biometrics (WebAuthn)
  */
 
 const VaultManager = (() => {
-  const STORAGE_KEY = 'aegis_vault_data_v1';
-  const SETTINGS_KEY = 'aegis_vault_settings_v1';
+  const STORAGE_KEY = 'aegis_vault_data_v2';
+  const OLD_STORAGE_KEY = 'aegis_vault_data_v1';
+  const SETTINGS_KEY = 'aegis_vault_settings_v2';
 
-  let cryptoKey = null;
+  let vaultMasterKey = null; // Stored only in memory while unlocked
   let decryptedItems = [];
   let isUnlocked = false;
   let autoLockTimeoutId = null;
@@ -42,32 +43,71 @@ const VaultManager = (() => {
   loadSettings();
 
   /**
-   * Check if a vault already exists on this device
+   * Check if a vault exists
    */
   function isVaultInitialized() {
-    return localStorage.getItem(STORAGE_KEY) !== null;
+    return localStorage.getItem(STORAGE_KEY) !== null || localStorage.getItem(OLD_STORAGE_KEY) !== null;
   }
 
   /**
-   * Get raw encrypted payload from local storage
+   * Get raw encrypted payload
    */
   function getRawVaultData() {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(OLD_STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   }
 
   /**
-   * Create a new Vault with Master Password
+   * Check if biometric unlock is enabled for this vault
    */
-  async function createVault(masterPassword) {
-    if (!masterPassword || masterPassword.length < 8) {
-      throw new Error('Master password must be at least 8 characters long.');
+  function hasBiometricsEnabled() {
+    const data = getRawVaultData();
+    return !!(data && data.biometrics && data.biometrics.enabled && data.biometrics.credentialId);
+  }
+
+  /**
+   * Create a new Vault with Master PIN and optional Biometrics
+   */
+  async function createVault(pin, enableBiometrics = false) {
+    if (!pin || pin.length < 4) {
+      throw new Error('Master PIN must be at least 4 digits.');
     }
 
-    const salt = CryptoEngine.getRandomBytes(CryptoEngine.SALT_BYTE_LENGTH);
-    const key = await CryptoEngine.deriveKey(masterPassword, salt);
-    const authCanary = await CryptoEngine.createAuthToken(key);
+    // 1. Generate primary random AES-256 Vault Master Key
+    const masterKey = await CryptoEngine.generateMasterKey();
 
+    // 2. Derive PIN Key via PBKDF2
+    const pinSalt = CryptoEngine.getRandomBytes(CryptoEngine.SALT_BYTE_LENGTH);
+    const pinKey = await CryptoEngine.deriveKey(pin, pinSalt);
+
+    // 3. Wrap Master Key with PIN Key
+    const pinWrappedKey = await CryptoEngine.wrapKey(masterKey, pinKey);
+    const pinAuth = await CryptoEngine.createAuthToken(pinKey);
+
+    // 4. Handle Biometrics (if requested)
+    let biometricsData = { enabled: false };
+    if (enableBiometrics) {
+      try {
+        const credId = await CryptoEngine.enrollBiometrics();
+        const bioSecret = CryptoEngine.getRandomBytes(32);
+        const bioKey = await CryptoEngine.deriveKey(
+          CryptoEngine.bufferToBase64(bioSecret.buffer),
+          pinSalt
+        );
+        const bioWrappedKey = await CryptoEngine.wrapKey(masterKey, bioKey);
+
+        biometricsData = {
+          enabled: true,
+          credentialId: credId,
+          bioSecret: CryptoEngine.bufferToBase64(bioSecret.buffer),
+          bioWrappedKey: bioWrappedKey
+        };
+      } catch (err) {
+        console.warn('Biometric enrollment skipped or rejected:', err);
+      }
+    }
+
+    // 5. Initial vault item
     const initialItems = [
       {
         id: crypto.randomUUID(),
@@ -76,20 +116,23 @@ const VaultManager = (() => {
         username: 'secure-user',
         password: CryptoEngine.generatePassword({ length: 20 }),
         url: 'https://github.com',
-        notes: 'Welcome! Your vault is protected by client-side AES-256-GCM encryption with 300,000 PBKDF2 iterations. Passwords never leave your device in plaintext.',
+        notes: 'Your vault is protected by hardware biometrics (Fingerprint / Face ID) backed by your Master PIN. Encryption is client-side AES-256-GCM.',
         favorite: true,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        history: []
       }
     ];
 
-    const encryptedVault = await CryptoEngine.encrypt(initialItems, key);
+    // 6. Encrypt items with the Vault Master Key
+    const encryptedVault = await CryptoEngine.encrypt(initialItems, masterKey);
 
     const vaultPayload = {
-      version: 1,
-      salt: CryptoEngine.bufferToBase64(salt.buffer),
-      authIv: authCanary.iv,
-      authCiphertext: authCanary.ciphertext,
+      version: 2,
+      pinSalt: CryptoEngine.bufferToBase64(pinSalt.buffer),
+      pinAuth: pinAuth,
+      pinWrappedKey: pinWrappedKey,
+      biometrics: biometricsData,
       vaultIv: encryptedVault.iv,
       vaultCiphertext: encryptedVault.ciphertext,
       createdAt: new Date().toISOString(),
@@ -97,62 +140,187 @@ const VaultManager = (() => {
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(vaultPayload));
+    localStorage.removeItem(OLD_STORAGE_KEY);
 
-    // Set state
-    cryptoKey = key;
+    // In-memory state
+    vaultMasterKey = masterKey;
     decryptedItems = initialItems;
     isUnlocked = true;
     resetAutoLockTimer();
 
-    return true;
+    return { biometricsEnabled: biometricsData.enabled };
   }
 
   /**
-   * Unlock an existing vault with master password
+   * Unlock Vault with Master PIN
    */
-  async function unlockVault(masterPassword) {
+  async function unlockWithPin(pin) {
     const vaultData = getRawVaultData();
-    if (!vaultData) {
-      throw new Error('No vault found on this device.');
+    if (!vaultData) throw new Error('No vault found.');
+
+    // Backward compatibility with v1 if exists
+    if (vaultData.version === 1) {
+      return unlockV1Legacy(pin);
     }
 
-    const salt = new Uint8Array(CryptoEngine.base64ToBuffer(vaultData.salt));
-    const key = await CryptoEngine.deriveKey(masterPassword, salt);
+    const pinSalt = new Uint8Array(CryptoEngine.base64ToBuffer(vaultData.pinSalt));
+    const pinKey = await CryptoEngine.deriveKey(pin, pinSalt);
 
-    // Verify auth canary
+    // Verify PIN canary
     const isValid = await CryptoEngine.verifyAuthToken(
-      vaultData.authCiphertext,
-      vaultData.authIv,
-      key
+      vaultData.pinAuth.ciphertext,
+      vaultData.pinAuth.iv,
+      pinKey
     );
 
     if (!isValid) {
-      throw new Error('Incorrect Master Password. Please verify and try again.');
+      throw new Error('Incorrect Master PIN. Please try again.');
     }
 
-    // Decrypt items
+    // Unwrap Master Key
+    let masterKey;
     try {
-      const items = await CryptoEngine.decrypt(
-        vaultData.vaultCiphertext,
-        vaultData.vaultIv,
-        key
-      );
-      decryptedItems = Array.isArray(items) ? items : [];
-    } catch (e) {
-      throw new Error('Vault decryption failed. Integrity check mismatch.');
+      masterKey = await CryptoEngine.unwrapKey(vaultData.pinWrappedKey, pinKey);
+    } catch {
+      throw new Error('Failed to unwrap encryption key.');
     }
 
-    cryptoKey = key;
+    // Decrypt Vault items
+    const items = await CryptoEngine.decrypt(
+      vaultData.vaultCiphertext,
+      vaultData.vaultIv,
+      masterKey
+    );
+
+    vaultMasterKey = masterKey;
+    decryptedItems = Array.isArray(items) ? items : [];
     isUnlocked = true;
     resetAutoLockTimer();
     return true;
   }
 
   /**
-   * Lock the vault and wipe keys from memory
+   * Unlock Vault with Biometrics (Fingerprint / Face ID / Touch ID / Windows Hello)
+   */
+  async function unlockWithBiometrics() {
+    const vaultData = getRawVaultData();
+    if (!vaultData || !vaultData.biometrics || !vaultData.biometrics.enabled) {
+      throw new Error('Biometric unlock is not enabled on this vault.');
+    }
+
+    // Trigger platform biometric verification prompt
+    await CryptoEngine.authenticateBiometrics(vaultData.biometrics.credentialId);
+
+    // Unpack biometric secret and unwrap Master Key
+    const pinSalt = new Uint8Array(CryptoEngine.base64ToBuffer(vaultData.pinSalt));
+    const bioKey = await CryptoEngine.deriveKey(vaultData.biometrics.bioSecret, pinSalt);
+
+    const masterKey = await CryptoEngine.unwrapKey(
+      vaultData.biometrics.bioWrappedKey,
+      bioKey
+    );
+
+    const items = await CryptoEngine.decrypt(
+      vaultData.vaultCiphertext,
+      vaultData.vaultIv,
+      masterKey
+    );
+
+    vaultMasterKey = masterKey;
+    decryptedItems = Array.isArray(items) ? items : [];
+    isUnlocked = true;
+    resetAutoLockTimer();
+    return true;
+  }
+
+  /**
+   * Enable Biometrics while unlocked
+   */
+  async function enableBiometrics() {
+    if (!isUnlocked || !vaultMasterKey) {
+      throw new Error('Vault must be unlocked to configure biometrics.');
+    }
+
+    const vaultData = getRawVaultData();
+    const pinSalt = new Uint8Array(CryptoEngine.base64ToBuffer(vaultData.pinSalt));
+
+    const credId = await CryptoEngine.enrollBiometrics();
+    const bioSecret = CryptoEngine.getRandomBytes(32);
+    const bioKey = await CryptoEngine.deriveKey(
+      CryptoEngine.bufferToBase64(bioSecret.buffer),
+      pinSalt
+    );
+    const bioWrappedKey = await CryptoEngine.wrapKey(vaultMasterKey, bioKey);
+
+    vaultData.biometrics = {
+      enabled: true,
+      credentialId: credId,
+      bioSecret: CryptoEngine.bufferToBase64(bioSecret.buffer),
+      bioWrappedKey: bioWrappedKey
+    };
+    vaultData.updatedAt = new Date().toISOString();
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(vaultData));
+    resetAutoLockTimer();
+    return true;
+  }
+
+  /**
+   * Disable Biometrics
+   */
+  function disableBiometrics() {
+    if (!isUnlocked) throw new Error('Vault must be unlocked.');
+    const vaultData = getRawVaultData();
+    if (vaultData) {
+      vaultData.biometrics = { enabled: false };
+      vaultData.updatedAt = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(vaultData));
+    }
+  }
+
+  /**
+   * Change Master PIN
+   */
+  async function changePin(currentPin, newPin) {
+    if (!isUnlocked || !vaultMasterKey) throw new Error('Vault is locked.');
+    if (!newPin || newPin.length < 4) {
+      throw new Error('New Master PIN must be at least 4 digits.');
+    }
+
+    const vaultData = getRawVaultData();
+    const currentSalt = new Uint8Array(CryptoEngine.base64ToBuffer(vaultData.pinSalt));
+    const currentPinKey = await CryptoEngine.deriveKey(currentPin, currentSalt);
+
+    const valid = await CryptoEngine.verifyAuthToken(
+      vaultData.pinAuth.ciphertext,
+      vaultData.pinAuth.iv,
+      currentPinKey
+    );
+    if (!valid) {
+      throw new Error('Current Master PIN is incorrect.');
+    }
+
+    // Derive new PIN key
+    const newSalt = CryptoEngine.getRandomBytes(CryptoEngine.SALT_BYTE_LENGTH);
+    const newPinKey = await CryptoEngine.deriveKey(newPin, newSalt);
+    const newPinWrapped = await CryptoEngine.wrapKey(vaultMasterKey, newPinKey);
+    const newPinAuth = await CryptoEngine.createAuthToken(newPinKey);
+
+    vaultData.pinSalt = CryptoEngine.bufferToBase64(newSalt.buffer);
+    vaultData.pinAuth = newPinAuth;
+    vaultData.pinWrappedKey = newPinWrapped;
+    vaultData.updatedAt = new Date().toISOString();
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(vaultData));
+    resetAutoLockTimer();
+    return true;
+  }
+
+  /**
+   * Lock Vault
    */
   function lockVault() {
-    cryptoKey = null;
+    vaultMasterKey = null;
     decryptedItems = [];
     isUnlocked = false;
     if (autoLockTimeoutId) {
@@ -165,35 +333,15 @@ const VaultManager = (() => {
   }
 
   /**
-   * Reset the auto-lock countdown timer on user activity
-   */
-  function resetAutoLockTimer() {
-    if (autoLockTimeoutId) {
-      clearTimeout(autoLockTimeoutId);
-      autoLockTimeoutId = null;
-    }
-
-    if (autoLockMinutes > 0 && isUnlocked) {
-      autoLockTimeoutId = setTimeout(() => {
-        lockVault();
-      }, autoLockMinutes * 60 * 1000);
-    }
-  }
-
-  /**
    * Save items encrypted back to storage
    */
   async function saveVault() {
-    if (!isUnlocked || !cryptoKey) {
-      throw new Error('Vault is locked. Cannot save modifications.');
+    if (!isUnlocked || !vaultMasterKey) {
+      throw new Error('Vault is locked.');
     }
 
     const vaultData = getRawVaultData();
-    if (!vaultData) {
-      throw new Error('Vault data missing from storage.');
-    }
-
-    const encryptedVault = await CryptoEngine.encrypt(decryptedItems, cryptoKey);
+    const encryptedVault = await CryptoEngine.encrypt(decryptedItems, vaultMasterKey);
     vaultData.vaultIv = encryptedVault.iv;
     vaultData.vaultCiphertext = encryptedVault.ciphertext;
     vaultData.updatedAt = new Date().toISOString();
@@ -201,25 +349,28 @@ const VaultManager = (() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(vaultData));
   }
 
-  /**
-   * Get all decrypted items
-   */
+  function resetAutoLockTimer() {
+    if (autoLockTimeoutId) {
+      clearTimeout(autoLockTimeoutId);
+      autoLockTimeoutId = null;
+    }
+    if (autoLockMinutes > 0 && isUnlocked) {
+      autoLockTimeoutId = setTimeout(() => {
+        lockVault();
+      }, autoLockMinutes * 60 * 1000);
+    }
+  }
+
   function getItems() {
     if (!isUnlocked) return [];
     return [...decryptedItems];
   }
 
-  /**
-   * Get item by id
-   */
   function getItemById(id) {
     if (!isUnlocked) return null;
     return decryptedItems.find(item => item.id === id) || null;
   }
 
-  /**
-   * Add a new item to the vault
-   */
   async function addItem(itemData) {
     if (!isUnlocked) throw new Error('Vault is locked');
 
@@ -243,9 +394,6 @@ const VaultManager = (() => {
     return newItem;
   }
 
-  /**
-   * Update existing item
-   */
   async function updateItem(id, updatedFields) {
     if (!isUnlocked) throw new Error('Vault is locked');
 
@@ -253,15 +401,12 @@ const VaultManager = (() => {
     if (index === -1) throw new Error('Item not found');
 
     const currentItem = decryptedItems[index];
-
-    // If password changed, push to history
     const history = currentItem.history ? [...currentItem.history] : [];
     if (updatedFields.password && updatedFields.password !== currentItem.password) {
       history.unshift({
         password: currentItem.password,
         changedAt: new Date().toISOString()
       });
-      // Keep last 5 password histories
       if (history.length > 5) history.pop();
     }
 
@@ -278,9 +423,6 @@ const VaultManager = (() => {
     return updated;
   }
 
-  /**
-   * Delete item from vault
-   */
   async function deleteItem(id) {
     if (!isUnlocked) throw new Error('Vault is locked');
     decryptedItems = decryptedItems.filter(item => item.id !== id);
@@ -288,54 +430,13 @@ const VaultManager = (() => {
     resetAutoLockTimer();
   }
 
-  /**
-   * Change Master Password
-   */
-  async function changeMasterPassword(currentPassword, newPassword) {
-    if (!isUnlocked) throw new Error('Vault is locked');
-    if (!newPassword || newPassword.length < 8) {
-      throw new Error('New master password must be at least 8 characters long.');
-    }
-
-    // Verify current master password
-    const vaultData = getRawVaultData();
-    const currentSalt = new Uint8Array(CryptoEngine.base64ToBuffer(vaultData.salt));
-    const testKey = await CryptoEngine.deriveKey(currentPassword, currentSalt);
-    const valid = await CryptoEngine.verifyAuthToken(vaultData.authCiphertext, vaultData.authIv, testKey);
-
-    if (!valid) {
-      throw new Error('Current master password is incorrect.');
-    }
-
-    // Generate new salt and derive new key
-    const newSalt = CryptoEngine.getRandomBytes(CryptoEngine.SALT_BYTE_LENGTH);
-    const newKey = await CryptoEngine.deriveKey(newPassword, newSalt);
-    const newAuthCanary = await CryptoEngine.createAuthToken(newKey);
-    const newEncryptedVault = await CryptoEngine.encrypt(decryptedItems, newKey);
-
-    vaultData.salt = CryptoEngine.bufferToBase64(newSalt.buffer);
-    vaultData.authIv = newAuthCanary.iv;
-    vaultData.authCiphertext = newAuthCanary.ciphertext;
-    vaultData.vaultIv = newEncryptedVault.iv;
-    vaultData.vaultCiphertext = newEncryptedVault.ciphertext;
-    vaultData.updatedAt = new Date().toISOString();
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(vaultData));
-    cryptoKey = newKey;
-    resetAutoLockTimer();
-    return true;
-  }
-
-  /**
-   * Export encrypted vault backup file
-   */
   function exportEncryptedBackup() {
     const rawData = getRawVaultData();
     if (!rawData) throw new Error('No vault data to export');
 
     const backupObj = {
       app: 'AegisVault',
-      exportFormat: 'AES-256-GCM-ENCRYPTED',
+      exportFormat: 'AES-256-GCM-PIN-BIOMETRIC',
       exportedAt: new Date().toISOString(),
       payload: rawData
     };
@@ -343,9 +444,6 @@ const VaultManager = (() => {
     return JSON.stringify(backupObj, null, 2);
   }
 
-  /**
-   * Import vault backup (replace or merge)
-   */
   async function importEncryptedBackup(jsonString) {
     let parsed;
     try {
@@ -354,7 +452,7 @@ const VaultManager = (() => {
       throw new Error('Invalid JSON backup file.');
     }
 
-    if (!parsed.payload || !parsed.payload.salt || !parsed.payload.vaultCiphertext) {
+    if (!parsed.payload || !parsed.payload.vaultCiphertext) {
       throw new Error('Invalid AegisVault backup structure.');
     }
 
@@ -363,18 +461,13 @@ const VaultManager = (() => {
     return true;
   }
 
-  /**
-   * Permanent vault destruction / wipe
-   */
   function destroyVault() {
     lockVault();
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(OLD_STORAGE_KEY);
     localStorage.removeItem(SETTINGS_KEY);
   }
 
-  /**
-   * Security Audit: find weak, reused, or compromised passwords
-   */
   function getSecurityAudit() {
     if (!isUnlocked) return null;
 
@@ -386,18 +479,12 @@ const VaultManager = (() => {
     decryptedItems.forEach(item => {
       const pwd = item.password || '';
       const strength = CryptoEngine.evaluateStrength(pwd);
-      if (strength.score <= 2) {
-        weakCount++;
-      }
-      if (pwd) {
-        passwordCounts[pwd] = (passwordCounts[pwd] || 0) + 1;
-      }
+      if (strength.score <= 2) weakCount++;
+      if (pwd) passwordCounts[pwd] = (passwordCounts[pwd] || 0) + 1;
     });
 
     Object.values(passwordCounts).forEach(count => {
-      if (count > 1) {
-        reusedCount += count;
-      }
+      if (count > 1) reusedCount += count;
     });
 
     let overallScore = 100;
@@ -407,18 +494,33 @@ const VaultManager = (() => {
       overallScore = Math.max(10, Math.round(100 - weakPenalty - reusePenalty));
     }
 
-    return {
-      total,
-      weakCount,
-      reusedCount,
-      overallScore
-    };
+    return { total, weakCount, reusedCount, overallScore };
+  }
+
+  // Helper for backward compatibility
+  async function unlockV1Legacy(password) {
+    const raw = JSON.parse(localStorage.getItem(OLD_STORAGE_KEY));
+    const salt = new Uint8Array(CryptoEngine.base64ToBuffer(raw.salt));
+    const key = await CryptoEngine.deriveKey(password, salt);
+    const valid = await CryptoEngine.verifyAuthToken(raw.authCiphertext, raw.authIv, key);
+    if (!valid) throw new Error('Incorrect Master Password');
+    const items = await CryptoEngine.decrypt(raw.vaultCiphertext, raw.vaultIv, key);
+    vaultMasterKey = key;
+    decryptedItems = Array.isArray(items) ? items : [];
+    isUnlocked = true;
+    resetAutoLockTimer();
+    return true;
   }
 
   return {
     isVaultInitialized,
+    hasBiometricsEnabled,
     createVault,
-    unlockVault,
+    unlockWithPin,
+    unlockWithBiometrics,
+    enableBiometrics,
+    disableBiometrics,
+    changePin,
     lockVault,
     get isUnlocked() { return isUnlocked; },
     getItems,
@@ -426,7 +528,6 @@ const VaultManager = (() => {
     addItem,
     updateItem,
     deleteItem,
-    changeMasterPassword,
     exportEncryptedBackup,
     importEncryptedBackup,
     destroyVault,

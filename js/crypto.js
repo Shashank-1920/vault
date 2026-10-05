@@ -290,6 +290,164 @@ const CryptoEngine = (() => {
     };
   }
 
+  /**
+   * Generate a random AES-256-GCM Vault Master Key
+   * @returns {Promise<CryptoKey>}
+   */
+  async function generateMasterKey() {
+    return window.crypto.subtle.generateKey(
+      {
+        name: KEY_ALGORITHM,
+        length: KEY_LENGTH
+      },
+      true,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  /**
+   * Export CryptoKey as Base64 raw bytes
+   * @param {CryptoKey} key 
+   * @returns {Promise<string>}
+   */
+  async function exportKeyRaw(key) {
+    const raw = await window.crypto.subtle.exportKey('raw', key);
+    return bufferToBase64(raw);
+  }
+
+  /**
+   * Import CryptoKey from Base64 raw bytes
+   * @param {string} base64Str 
+   * @returns {Promise<CryptoKey>}
+   */
+  async function importKeyRaw(base64Str) {
+    const buffer = base64ToBuffer(base64Str);
+    return window.crypto.subtle.importKey(
+      'raw',
+      buffer,
+      {
+        name: KEY_ALGORITHM,
+        length: KEY_LENGTH
+      },
+      true,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  /**
+   * Wrap (encrypt) a CryptoKey using another CryptoKey
+   * @param {CryptoKey} targetKey 
+   * @param {CryptoKey} wrappingKey 
+   * @returns {Promise<{iv: string, ciphertext: string}>}
+   */
+  async function wrapKey(targetKey, wrappingKey) {
+    const rawBase64 = await exportKeyRaw(targetKey);
+    return encrypt(rawBase64, wrappingKey);
+  }
+
+  /**
+   * Unwrap (decrypt) a CryptoKey using a wrapping CryptoKey
+   * @param {{iv: string, ciphertext: string}} wrapped 
+   * @param {CryptoKey} wrappingKey 
+   * @returns {Promise<CryptoKey>}
+   */
+  async function unwrapKey(wrapped, wrappingKey) {
+    const rawBase64 = await decrypt(wrapped.ciphertext, wrapped.iv, wrappingKey);
+    return importKeyRaw(rawBase64);
+  }
+
+  /**
+   * WebAuthn Biometric Support Checker
+   */
+  async function isBiometricsSupported() {
+    try {
+      if (!window.PublicKeyCredential) return false;
+      if (typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !== 'function') {
+        return false;
+      }
+      return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Enroll Biometrics via WebAuthn Platform Authenticator
+   * (Touch ID, Face ID, Android Fingerprint, Windows Hello)
+   */
+  async function enrollBiometrics(userId = 'vault-owner', userName = 'Vault Owner') {
+    if (!window.PublicKeyCredential) {
+      throw new Error('WebAuthn / Biometrics not supported on this browser.');
+    }
+
+    const challenge = getRandomBytes(32);
+    const userHandle = strToBuffer(userId);
+
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge: challenge,
+        rp: {
+          name: 'AegisVault',
+          id: window.location.hostname || 'localhost'
+        },
+        user: {
+          id: userHandle,
+          name: userName,
+          displayName: userName
+        },
+        pubKeyCredParams: [
+          { alg: -7, type: 'public-key' },   // ES256
+          { alg: -257, type: 'public-key' }  // RS256
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform',
+          userVerification: 'required',
+          requireResidentKey: false
+        },
+        timeout: 60000
+      }
+    });
+
+    if (!credential) {
+      throw new Error('Biometric registration was canceled or rejected.');
+    }
+
+    return bufferToBase64(credential.rawId);
+  }
+
+  /**
+   * Authenticate via Biometrics
+   */
+  async function authenticateBiometrics(credentialIdBase64) {
+    if (!window.PublicKeyCredential) {
+      throw new Error('Biometrics not supported.');
+    }
+
+    const challenge = getRandomBytes(32);
+    const allowCredentials = credentialIdBase64 ? [
+      {
+        id: base64ToBuffer(credentialIdBase64),
+        type: 'public-key'
+      }
+    ] : [];
+
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge: challenge,
+        rpId: window.location.hostname || 'localhost',
+        userVerification: 'required',
+        allowCredentials: allowCredentials,
+        timeout: 60000
+      }
+    });
+
+    if (!assertion) {
+      throw new Error('Biometric authentication failed.');
+    }
+
+    return true;
+  }
+
   return {
     SALT_BYTE_LENGTH,
     getRandomBytes,
@@ -301,7 +459,15 @@ const CryptoEngine = (() => {
     createAuthToken,
     verifyAuthToken,
     generatePassword,
-    evaluateStrength
+    evaluateStrength,
+    generateMasterKey,
+    exportKeyRaw,
+    importKeyRaw,
+    wrapKey,
+    unwrapKey,
+    isBiometricsSupported,
+    enrollBiometrics,
+    authenticateBiometrics
   };
 })();
 

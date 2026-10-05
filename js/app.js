@@ -10,17 +10,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const viewMain = document.getElementById('view-main');
   const toastContainer = document.getElementById('toast-container');
 
-  // Forms & Auth
+  // Forms & Auth (Master PIN & Biometrics)
   const formSetup = document.getElementById('form-setup');
-  const setupPasswordInput = document.getElementById('setup-password');
-  const setupConfirmInput = document.getElementById('setup-confirm');
-  const setupStrengthBar = document.querySelector('#setup-strength-meter .meter-fill');
-  const setupStrengthText = document.querySelector('#setup-strength-meter .strength-text');
-  const setupStrengthEntropy = document.querySelector('#setup-strength-meter .strength-entropy');
+  const setupPinInput = document.getElementById('setup-pin');
+  const setupPinConfirmInput = document.getElementById('setup-pin-confirm');
+  const setupEnableBiometrics = document.getElementById('setup-enable-biometrics');
+  const bioSetupCard = document.getElementById('bio-setup-card');
 
   const formUnlock = document.getElementById('form-unlock');
-  const unlockPasswordInput = document.getElementById('unlock-password');
+  const unlockPinInput = document.getElementById('unlock-pin');
   const unlockError = document.getElementById('unlock-error');
+  const unlockBiometricSection = document.getElementById('unlock-biometric-section');
+  const btnTriggerBiometricUnlock = document.getElementById('btn-trigger-biometric-unlock');
   const btnEmergencyReset = document.getElementById('btn-emergency-reset');
   const btnQuickLock = document.getElementById('btn-quick-lock');
 
@@ -88,16 +89,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const genStrengthText = document.getElementById('gen-strength-text');
   const genEntropyText = document.getElementById('gen-entropy-text');
 
-  // Settings & Change Password Modal
+  // Settings & Change PIN Modal
   const settingAutolock = document.getElementById('setting-autolock');
-  const btnOpenChangePw = document.getElementById('btn-open-change-pw');
-  const modalChangePw = document.getElementById('modal-change-pw');
-  const formChangePw = document.getElementById('form-change-pw');
-  const btnCloseChangePw = document.getElementById('btn-close-change-pw');
-  const btnCancelChangePw = document.getElementById('btn-cancel-change-pw');
-  const changeCurrentPw = document.getElementById('change-current-pw');
-  const changeNewPw = document.getElementById('change-new-pw');
-  const changeConfirmPw = document.getElementById('change-confirm-pw');
+  const settingBiometricsToggle = document.getElementById('setting-biometrics-toggle');
+  const btnOpenChangePin = document.getElementById('btn-open-change-pin');
+  const modalChangePin = document.getElementById('modal-change-pin');
+  const formChangePin = document.getElementById('form-change-pin');
+  const btnCloseChangePin = document.getElementById('btn-close-change-pin');
+  const btnCancelChangePin = document.getElementById('btn-cancel-change-pin');
+  const changeCurrentPin = document.getElementById('change-current-pin');
+  const changeNewPin = document.getElementById('change-new-pin');
+  const changeConfirmPin = document.getElementById('change-confirm-pin');
 
   const btnExportVault = document.getElementById('btn-export-vault');
   const btnImportVault = document.getElementById('btn-import-vault');
@@ -129,11 +131,20 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   /* ==================== INITIALIZATION ==================== */
-  function initApp() {
+  async function initApp() {
     VaultManager.setOnLock(() => {
       showUnlockView();
       showToast('Vault locked automatically', 'info');
     });
+
+    // Check device biometric support
+    const bioAvailable = await CryptoEngine.isBiometricsSupported();
+    if (!bioAvailable && bioSetupCard) {
+      bioSetupCard.style.opacity = '0.5';
+      const desc = bioSetupCard.querySelector('.bio-setup-desc');
+      if (desc) desc.textContent = 'Biometrics not available on this connection/browser (requires HTTPS or localhost).';
+      if (setupEnableBiometrics) setupEnableBiometrics.checked = false;
+    }
 
     if (VaultManager.isVaultInitialized()) {
       showUnlockView();
@@ -157,6 +168,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (settingAutolock) {
       settingAutolock.value = VaultManager.autoLockMinutes.toString();
     }
+    if (settingBiometricsToggle) {
+      settingBiometricsToggle.checked = VaultManager.hasBiometricsEnabled();
+    }
   }
 
   /* ==================== VIEW SWITCHING ==================== */
@@ -164,20 +178,29 @@ document.addEventListener('DOMContentLoaded', () => {
     viewSetup.classList.remove('hidden');
     viewUnlock.classList.add('hidden');
     viewMain.classList.add('hidden');
-    setupPasswordInput.value = '';
-    setupConfirmInput.value = '';
-    updateStrengthDisplay('', setupStrengthBar, setupStrengthText, setupStrengthEntropy);
+    if (setupPinInput) setupPinInput.value = '';
+    if (setupPinConfirmInput) setupPinConfirmInput.value = '';
   }
 
   function showUnlockView() {
     viewSetup.classList.add('hidden');
     viewUnlock.classList.remove('hidden');
     viewMain.classList.add('hidden');
-    unlockPasswordInput.value = '';
+    if (unlockPinInput) unlockPinInput.value = '';
     unlockError.classList.add('hidden');
     unlockError.textContent = '';
     closeAllModals();
-    setTimeout(() => unlockPasswordInput.focus(), 150);
+
+    const hasBio = VaultManager.hasBiometricsEnabled();
+    if (unlockBiometricSection) {
+      unlockBiometricSection.classList.toggle('hidden', !hasBio);
+    }
+
+    setTimeout(() => {
+      if (!hasBio && unlockPinInput) {
+        unlockPinInput.focus();
+      }
+    }, 150);
   }
 
   function showMainView() {
@@ -273,27 +296,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /* ==================== AUTH LISTENERS ==================== */
-  setupPasswordInput.addEventListener('input', (e) => {
-    updateStrengthDisplay(e.target.value, setupStrengthBar, setupStrengthText, setupStrengthEntropy);
-  });
-
+  /* ==================== AUTH LISTENERS (PIN & BIOMETRIC) ==================== */
   formSetup.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const pw = setupPasswordInput.value;
-    const confirm = setupConfirmInput.value;
+    const pin = setupPinInput.value;
+    const confirm = setupPinConfirmInput.value;
 
-    if (pw !== confirm) {
-      showToast('Master passwords do not match!', 'error');
+    if (pin !== confirm) {
+      showToast('Master PINs do not match!', 'error');
       return;
     }
 
+    if (pin.length < 4) {
+      showToast('Master PIN must be at least 4 digits.', 'error');
+      return;
+    }
+
+    const enableBio = setupEnableBiometrics && setupEnableBiometrics.checked;
     const submitBtn = document.getElementById('btn-create-vault');
     setButtonLoading(submitBtn, true);
 
     try {
-      await VaultManager.createVault(pw);
-      showToast('Vault securely created!', 'success');
+      const result = await VaultManager.createVault(pin, enableBio);
+      showToast(
+        result.biometricsEnabled 
+          ? 'Vault initialized with Hardware Biometrics & PIN!' 
+          : 'Vault initialized with Master PIN!', 
+        'success'
+      );
       showMainView();
     } catch (err) {
       showToast(err.message, 'error');
@@ -302,19 +332,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Biometric Unlock Action
+  if (btnTriggerBiometricUnlock) {
+    btnTriggerBiometricUnlock.addEventListener('click', async () => {
+      unlockError.classList.add('hidden');
+      try {
+        await VaultManager.unlockWithBiometrics();
+        showToast('Unlocked with Biometrics', 'success');
+        showMainView();
+      } catch (err) {
+        console.warn('Biometric unlock issue:', err);
+        unlockError.textContent = 'Biometric scan canceled or failed. Enter your Master PIN below.';
+        unlockError.classList.remove('hidden');
+        if (unlockPinInput) unlockPinInput.focus();
+      }
+    });
+  }
+
+  // Master PIN Unlock Action
   formUnlock.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const pw = unlockPasswordInput.value;
+    const pin = unlockPinInput.value;
     const submitBtn = document.getElementById('btn-unlock-vault');
     unlockError.classList.add('hidden');
     setButtonLoading(submitBtn, true);
 
     try {
-      await VaultManager.unlockVault(pw);
+      await VaultManager.unlockWithPin(pin);
       showToast('Vault unlocked', 'success');
       showMainView();
     } catch (err) {
-      unlockError.textContent = err.message || 'Incorrect password';
+      unlockError.textContent = err.message || 'Incorrect PIN';
       unlockError.classList.remove('hidden');
       if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
     } finally {
@@ -846,45 +894,70 @@ document.addEventListener('DOMContentLoaded', () => {
     switchTab('tab-audit');
   });
 
-  /* ==================== SETTINGS & CHANGE MASTER PASSWORD ==================== */
+  /* ==================== SETTINGS & CHANGE MASTER PIN ==================== */
   settingAutolock.addEventListener('change', (e) => {
     VaultManager.autoLockMinutes = e.target.value;
     showToast(`Auto-lock set to ${e.target.value == 0 ? 'Never' : e.target.value + ' min'}`, 'info');
   });
 
-  btnOpenChangePw.addEventListener('click', () => {
-    formChangePw.reset();
-    modalChangePw.classList.remove('hidden');
-    changeCurrentPw.focus();
-  });
+  if (settingBiometricsToggle) {
+    settingBiometricsToggle.addEventListener('change', async (e) => {
+      if (e.target.checked) {
+        try {
+          await VaultManager.enableBiometrics();
+          showToast('Biometric unlock enabled!', 'success');
+        } catch (err) {
+          e.target.checked = false;
+          showToast('Could not enable biometrics: ' + err.message, 'error');
+        }
+      } else {
+        VaultManager.disableBiometrics();
+        showToast('Biometric unlock disabled', 'info');
+      }
+    });
+  }
 
-  btnCloseChangePw.addEventListener('click', () => modalChangePw.classList.add('hidden'));
-  btnCancelChangePw.addEventListener('click', () => modalChangePw.classList.add('hidden'));
+  if (btnOpenChangePin) {
+    btnOpenChangePin.addEventListener('click', () => {
+      formChangePin.reset();
+      modalChangePin.classList.remove('hidden');
+      changeCurrentPin.focus();
+    });
+  }
 
-  formChangePw.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const cur = changeCurrentPw.value;
-    const nw = changeNewPw.value;
-    const cnf = changeConfirmPw.value;
+  if (btnCloseChangePin) {
+    btnCloseChangePin.addEventListener('click', () => modalChangePin.classList.add('hidden'));
+  }
+  if (btnCancelChangePin) {
+    btnCancelChangePin.addEventListener('click', () => modalChangePin.classList.add('hidden'));
+  }
 
-    if (nw !== cnf) {
-      showToast('New passwords do not match!', 'error');
-      return;
-    }
+  if (formChangePin) {
+    formChangePin.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const cur = changeCurrentPin.value;
+      const nw = changeNewPin.value;
+      const cnf = changeConfirmPin.value;
 
-    const btn = document.getElementById('btn-submit-change-pw');
-    setButtonLoading(btn, true);
+      if (nw !== cnf) {
+        showToast('New PINs do not match!', 'error');
+        return;
+      }
 
-    try {
-      await VaultManager.changeMasterPassword(cur, nw);
-      modalChangePw.classList.add('hidden');
-      showToast('Master password successfully updated!', 'success');
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setButtonLoading(btn, false);
-    }
-  });
+      const btn = document.getElementById('btn-submit-change-pin');
+      setButtonLoading(btn, true);
+
+      try {
+        await VaultManager.changePin(cur, nw);
+        modalChangePin.classList.add('hidden');
+        showToast('Master PIN successfully updated!', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        setButtonLoading(btn, false);
+      }
+    });
+  }
 
   /* ==================== BACKUP & RESTORE ==================== */
   btnExportVault.addEventListener('click', () => {
@@ -1021,12 +1094,12 @@ document.addEventListener('DOMContentLoaded', () => {
   function closeAllModals() {
     modalItem.classList.add('hidden');
     modalViewItem.classList.add('hidden');
-    modalChangePw.classList.add('hidden');
+    if (modalChangePin) modalChangePin.classList.add('hidden');
     if (modalInstallGuide) modalInstallGuide.classList.add('hidden');
   }
 
   // Close modals on overlay backdrop tap
-  [modalItem, modalViewItem, modalChangePw, modalInstallGuide].forEach(modal => {
+  [modalItem, modalViewItem, modalChangePin, modalInstallGuide].forEach(modal => {
     if (modal) {
       modal.addEventListener('click', (e) => {
         if (e.target === modal) {
