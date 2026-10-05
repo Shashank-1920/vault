@@ -3,7 +3,7 @@
  * Cache-first offline capability ensuring 100% offline vault operation
  */
 
-const CACHE_NAME = 'aegis-vault-v1.0.0';
+const CACHE_NAME = 'aegis-vault-v2.0.0';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
