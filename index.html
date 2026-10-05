@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0e17">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AegisVault">
+  <meta name="description" content="AegisVault - Zero-knowledge client-side encrypted password manager. 100% private, offline-first mobile vault.">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icons/shield.svg">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  
+  <title>AegisVault — Zero-Knowledge Mobile Password Vault</title>
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Safe Area Wrapper for Mobile Devices -->
+  <div id="app-container">
+
+    <!-- Toast Notification Overlay -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+    <!-- ==================== VIEW 1: VAULT SETUP (FIRST TIME) ==================== -->
+    <section id="view-setup" class="view hidden">
+      <div class="auth-card">
+        <div class="auth-brand">
+          <div class="logo-shield">
+            <svg viewBox="0 0 24 24" width="40" height="40" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <circle cx="12" cy="11" r="2"/>
+              <path d="M12 13v3"/>
+            </svg>
+          </div>
+          <h1>Create Your Vault</h1>
+          <p class="brand-subtitle">Zero-knowledge AES-256-GCM encryption. Stored exclusively on this device.</p>
+        </div>
+
+        <form id="form-setup" class="auth-form" autocomplete="off">
+          <div class="form-group">
+            <label for="setup-password">Master Password</label>
+            <div class="input-with-action">
+              <input type="password" id="setup-password" required placeholder="Choose a very strong master password" minlength="8" autocomplete="new-password">
+              <button type="button" class="btn-icon toggle-password" data-target="setup-password" aria-label="Toggle password visibility">
+                <svg class="eye-open" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-closed hidden" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+            
+            <!-- Real-time strength meter -->
+            <div class="strength-meter-wrap" id="setup-strength-meter">
+              <div class="meter-bar"><div class="meter-fill" style="width: 0%;"></div></div>
+              <div class="strength-info">
+                <span class="strength-text">Enter password</span>
+                <span class="strength-entropy">0 bits entropy</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="setup-confirm">Confirm Master Password</label>
+            <div class="input-with-action">
+              <input type="password" id="setup-confirm" required placeholder="Re-enter your master password" minlength="8" autocomplete="new-password">
+              <button type="button" class="btn-icon toggle-password" data-target="setup-confirm" aria-label="Toggle password visibility">
+                <svg class="eye-open" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-closed hidden" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="security-warning-box">
+            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <div>
+              <strong>Zero-Knowledge Notice:</strong> There is NO password reset mechanism. If you lose your master password, your vault cannot be recovered by anyone.
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-create-vault">
+            <span class="btn-text">Initialize Secure Vault</span>
+            <span class="spinner hidden"></span>
+          </button>
+
+          <div class="auth-footer-actions">
+            <button type="button" class="btn-text-link" id="btn-import-first-time">Restore from .vault Backup</button>
+            <span class="divider-dot">•</span>
+            <button type="button" class="btn-text-link btn-install-pwa" style="color: var(--accent-cyan); font-weight: 600;">📲 Install App</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 2: UNLOCK VAULT ==================== -->
+    <section id="view-unlock" class="view">
+      <div class="auth-card">
+        <div class="auth-brand">
+          <div class="logo-shield pulse">
+            <svg viewBox="0 0 24 24" width="40" height="40" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <h1>AegisVault</h1>
+          <p class="brand-subtitle">Encrypted & Locked</p>
+        </div>
+
+        <form id="form-unlock" class="auth-form" autocomplete="off">
+          <div class="form-group">
+            <label for="unlock-password">Master Password</label>
+            <div class="input-with-action">
+              <input type="password" id="unlock-password" required placeholder="Enter Master Password" autocomplete="current-password" autofocus>
+              <button type="button" class="btn-icon toggle-password" data-target="unlock-password" aria-label="Toggle password visibility">
+                <svg class="eye-open" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-closed hidden" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+            <div id="unlock-error" class="error-msg hidden"></div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-unlock-vault">
+            <span class="btn-text">Unlock Vault</span>
+            <span class="spinner hidden"></span>
+          </button>
+
+          <div class="auth-footer-actions">
+            <button type="button" class="btn-text-link" id="btn-unlock-import">Import Backup</button>
+            <span class="divider-dot">•</span>
+            <button type="button" class="btn-text-link text-danger" id="btn-emergency-reset">Reset Vault</button>
+            <span class="divider-dot">•</span>
+            <button type="button" class="btn-text-link btn-install-pwa" style="color: var(--accent-cyan); font-weight: 600;">📲 Install App</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 3: MAIN VAULT APPLICATION ==================== -->
+    <section id="view-main" class="view hidden">
+      <!-- App Header -->
+      <header class="app-header">
+        <div class="header-left">
+          <div class="app-icon-small">
+            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          <div class="header-title">
+            <h2>AegisVault</h2>
+            <span class="status-indicator"><span class="status-dot"></span> AES-256 Active</span>
+          </div>
+        </div>
+        <div class="header-right" style="display: flex; gap: 8px; align-items: center;">
+          <button id="btn-header-install" class="btn btn-secondary btn-install-pwa" style="padding: 6px 12px; font-size: 13px; font-weight: 600; color: var(--accent-cyan);" title="Install as Mobile/Desktop App">
+            📲 Install App
+          </button>
+          <button id="btn-quick-lock" class="btn-icon header-action-btn" title="Lock Vault Now" aria-label="Lock Vault">
+            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Content Tabs -->
+      <main class="main-content">
+
+        <!-- TAB 1: VAULT ITEMS -->
+        <section id="tab-vault" class="tab-pane active">
+          <!-- Search & Filter Bar -->
+          <div class="search-container">
+            <div class="search-input-wrap">
+              <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="search" id="vault-search" placeholder="Search logins, notes, urls..." autocomplete="off">
+              <button id="clear-search" class="btn-icon hidden" aria-label="Clear Search">✕</button>
+            </div>
+          </div>
+
+          <!-- Category Chips Carousel -->
+          <div class="categories-scroll" id="category-filters">
+            <button class="chip active" data-category="all">All (<span id="count-all">0</span>)</button>
+            <button class="chip" data-category="favorite">★ Favorites (<span id="count-favorite">0</span>)</button>
+            <button class="chip" data-category="login">🔑 Logins (<span id="count-login">0</span>)</button>
+            <button class="chip" data-category="card">💳 Cards (<span id="count-card">0</span>)</button>
+            <button class="chip" data-category="note">📝 Notes (<span id="count-note">0</span>)</button>
+            <button class="chip" data-category="wifi">📶 Wi-Fi (<span id="count-wifi">0</span>)</button>
+            <button class="chip" data-category="id">🪪 Identity (<span id="count-id">0</span>)</button>
+          </div>
+
+          <!-- Security Health Overview Banner -->
+          <div class="security-banner" id="security-banner">
+            <div class="banner-gauge">
+              <div class="gauge-circle" id="gauge-circle">
+                <span id="banner-score">100</span>%
+              </div>
+            </div>
+            <div class="banner-text">
+              <h4>Vault Security Health</h4>
+              <p id="banner-summary">Calculating security profile...</p>
+            </div>
+            <button id="btn-view-audit" class="btn-badge">Inspect</button>
+          </div>
+
+          <!-- Items List Container -->
+          <div id="items-list" class="items-list">
+            <!-- Dynamically populated -->
+          </div>
+
+          <!-- Empty State -->
+          <div id="empty-state" class="empty-state hidden">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="1.5" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <h3>No entries found</h3>
+            <p>Your vault has no records matching this filter. Tap below to create your first secure item.</p>
+            <button class="btn btn-primary" id="btn-empty-add">+ Add Password</button>
+          </div>
+        </section>
+
+        <!-- TAB 2: ADVANCED PASSWORD GENERATOR -->
+        <section id="tab-generator" class="tab-pane hidden">
+          <div class="generator-card">
+            <h3>Password Generator</h3>
+            <p class="section-desc">Generate cryptographically secure high-entropy random keys.</p>
+
+            <div class="generated-display-card">
+              <div class="generated-password font-mono" id="gen-output">Select options</div>
+              <div class="gen-actions">
+                <button id="btn-copy-gen" class="btn btn-secondary" title="Copy to clipboard">
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span>Copy</span>
+                </button>
+                <button id="btn-refresh-gen" class="btn btn-secondary" title="Regenerate">
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                  <span>Reroll</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Strength Meter for Generated -->
+            <div class="strength-meter-wrap" id="gen-strength-meter">
+              <div class="meter-bar"><div class="meter-fill" style="width: 100%; background: #10b981;"></div></div>
+              <div class="strength-info">
+                <span class="strength-text" id="gen-strength-text">Military Grade</span>
+                <span class="strength-entropy" id="gen-entropy-text">96 bits entropy</span>
+              </div>
+            </div>
+
+            <!-- Length Slider -->
+            <div class="gen-option-block">
+              <div class="slider-header">
+                <label for="gen-length">Length</label>
+                <span class="slider-val" id="gen-length-val">20</span>
+              </div>
+              <input type="range" id="gen-length" min="8" max="64" value="20" class="custom-range">
+            </div>
+
+            <!-- Character Toggles -->
+            <div class="toggles-grid">
+              <label class="toggle-card">
+                <span>Uppercase (A-Z)</span>
+                <input type="checkbox" id="gen-upper" checked>
+                <span class="toggle-switch"></span>
+              </label>
+
+              <label class="toggle-card">
+                <span>Lowercase (a-z)</span>
+                <input type="checkbox" id="gen-lower" checked>
+                <span class="toggle-switch"></span>
+              </label>
+
+              <label class="toggle-card">
+                <span>Numbers (0-9)</span>
+                <input type="checkbox" id="gen-numbers" checked>
+                <span class="toggle-switch"></span>
+              </label>
+
+              <label class="toggle-card">
+                <span>Special (!@#$%^&*)</span>
+                <input type="checkbox" id="gen-symbols" checked>
+                <span class="toggle-switch"></span>
+              </label>
+
+              <label class="toggle-card">
+                <span>Avoid Ambiguous (1, l, 0, O)</span>
+                <input type="checkbox" id="gen-avoid-ambiguous" checked>
+                <span class="toggle-switch"></span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 3: SECURITY AUDIT -->
+        <section id="tab-audit" class="tab-pane hidden">
+          <div class="audit-card">
+            <h3>Vault Security Analysis</h3>
+            <p class="section-desc">Identifies vulnerable, weak, and duplicated passwords.</p>
+
+            <div class="audit-stats-grid">
+              <div class="stat-card">
+                <div class="stat-num" id="stat-total">0</div>
+                <div class="stat-label">Total Items</div>
+              </div>
+              <div class="stat-card stat-alert">
+                <div class="stat-num" id="stat-weak">0</div>
+                <div class="stat-label">Weak Passwords</div>
+              </div>
+              <div class="stat-card stat-warning">
+                <div class="stat-num" id="stat-reused">0</div>
+                <div class="stat-label">Reused Passwords</div>
+              </div>
+            </div>
+
+            <div class="audit-recommendations" id="audit-recommendations">
+              <!-- Dynamically populated items requiring attention -->
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 4: SETTINGS & BACKUP -->
+        <section id="tab-settings" class="tab-pane hidden">
+          <div class="settings-card">
+            <h3>Vault Settings</h3>
+
+            <!-- Auto Lock Setting -->
+            <div class="settings-group">
+              <label for="setting-autolock">Auto-Lock Inactivity Timeout</label>
+              <select id="setting-autolock" class="form-select">
+                <option value="1">1 minute</option>
+                <option value="5" selected>5 minutes (Recommended)</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="0">Never (Unsafe)</option>
+              </select>
+            </div>
+
+            <!-- Change Master Password -->
+            <div class="settings-group">
+              <button id="btn-open-change-pw" class="btn btn-secondary btn-block">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 2l-2 2m-1.5 1.5L12 11l-4-4 3.5-3.5a2.12 2.12 0 0 1 3 0l6.5 6.5z"/><circle cx="7.5" cy="16.5" r="4.5"/></svg>
+                Change Master Password
+              </button>
+            </div>
+
+            <!-- Backup & Restore -->
+            <div class="settings-divider"></div>
+            <h4>Backup & Portability</h4>
+            <p class="settings-hint">Your vault is client-side. Keep regular encrypted backups to prevent losing data if you clear your browser.</p>
+
+            <div class="btn-grid">
+              <button id="btn-export-vault" class="btn btn-secondary">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Encrypted .vault
+              </button>
+              <button id="btn-import-vault" class="btn btn-secondary">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Restore from Backup
+              </button>
+            </div>
+
+            <div class="settings-divider"></div>
+            <h4>Danger Zone</h4>
+            <button id="btn-destroy-vault" class="btn btn-danger btn-block">
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              Erase Vault & Data
+            </button>
+          </div>
+        </section>
+
+      </main>
+
+      <!-- Mobile Bottom Navigation Bar -->
+      <nav class="bottom-nav">
+        <button class="nav-item active" data-tab="tab-vault">
+          <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Vault</span>
+        </button>
+        <button class="nav-item" data-tab="tab-generator">
+          <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none"><path d="m18 15-6-6-6 6"/></svg>
+          <span>Generator</span>
+        </button>
+        <button class="nav-item fab-item" id="btn-floating-add" aria-label="Add new item">
+          <div class="fab-circle">
+            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+        </button>
+        <button class="nav-item" data-tab="tab-audit">
+          <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>Health</span>
+        </button>
+        <button class="nav-item" data-tab="tab-settings">
+          <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
+        </button>
+      </nav>
+    </section>
+
+    <!-- ==================== MODAL: ADD / EDIT ITEM ==================== -->
+    <div id="modal-item" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="modal-sheet">
+        <div class="sheet-handle"></div>
+        <div class="modal-header">
+          <h3 id="modal-item-title">Add Item</h3>
+          <button class="btn-icon btn-close-modal" id="btn-close-item-modal" aria-label="Close">✕</button>
+        </div>
+
+        <form id="form-item" class="modal-form" autocomplete="off">
+          <input type="hidden" id="item-id">
+
+          <!-- Category Selector -->
+          <div class="form-group">
+            <label for="item-category">Category</label>
+            <select id="item-category" class="form-select">
+              <option value="login">🔑 Login Credentials</option>
+              <option value="card">💳 Payment Card</option>
+              <option value="note">📝 Secure Note</option>
+              <option value="wifi">📶 Wi-Fi Password</option>
+              <option value="id">🪪 Identity / Document</option>
+            </select>
+          </div>
+
+          <!-- Title -->
+          <div class="form-group">
+            <label for="item-title">Title / Service Name</label>
+            <input type="text" id="item-title" required placeholder="e.g. Google, GitHub, Bank">
+          </div>
+
+          <!-- Username / Email -->
+          <div class="form-group" id="group-username">
+            <label for="item-username">Username / Email</label>
+            <input type="text" id="item-username" placeholder="user@example.com" autocomplete="off">
+          </div>
+
+          <!-- Password Field with Quick Generate Button -->
+          <div class="form-group" id="group-password">
+            <div class="label-with-action">
+              <label for="item-password">Password</label>
+              <button type="button" class="btn-inline-action" id="btn-quick-gen-fill">⚡ Generate Strong</button>
+            </div>
+            <div class="input-with-action">
+              <input type="password" id="item-password" placeholder="Password" autocomplete="new-password">
+              <button type="button" class="btn-icon toggle-password" data-target="item-password" aria-label="Toggle password visibility">
+                <svg class="eye-open" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="eye-closed hidden" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              </button>
+            </div>
+            
+            <div class="strength-meter-wrap" id="item-strength-meter">
+              <div class="meter-bar"><div class="meter-fill" style="width: 0%;"></div></div>
+              <div class="strength-info">
+                <span class="strength-text">Strength</span>
+                <span class="strength-entropy">0 bits</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- URL -->
+          <div class="form-group" id="group-url">
+            <label for="item-url">Website URL</label>
+            <input type="url" id="item-url" placeholder="https://example.com" autocomplete="off">
+          </div>
+
+          <!-- Notes -->
+          <div class="form-group">
+            <label for="item-notes">Encrypted Notes</label>
+            <textarea id="item-notes" rows="3" placeholder="Recovery codes, PINs, or confidential remarks..."></textarea>
+          </div>
+
+          <!-- Favorite Checkbox -->
+          <div class="form-group-checkbox">
+            <label class="checkbox-container">
+              <input type="checkbox" id="item-favorite">
+              <span class="checkmark"></span>
+              Mark as Favorite
+            </label>
+          </div>
+
+          <!-- Modal Action Buttons -->
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-item">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-save-item">Save to Vault</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ==================== MODAL: VIEW ITEM DETAILS ==================== -->
+    <div id="modal-view-item" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="modal-sheet">
+        <div class="sheet-handle"></div>
+        <div class="modal-header">
+          <div class="view-item-header-meta">
+            <span class="category-tag" id="view-meta-category">LOGIN</span>
+            <h3 id="view-title">Item Title</h3>
+          </div>
+          <div class="view-header-btns">
+            <button class="btn-icon" id="btn-view-toggle-fav" title="Favorite">★</button>
+            <button class="btn-icon" id="btn-close-view-modal">✕</button>
+          </div>
+        </div>
+
+        <div class="item-detail-fields">
+          <!-- Username field -->
+          <div class="detail-field" id="field-view-username">
+            <div class="detail-label">Username / Email</div>
+            <div class="detail-value-row">
+              <span class="detail-val select-all" id="view-username">-</span>
+              <button class="btn-icon-copy" id="btn-copy-username" title="Copy Username">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Password field -->
+          <div class="detail-field" id="field-view-password">
+            <div class="detail-label">Password</div>
+            <div class="detail-value-row">
+              <span class="detail-val font-mono masked" id="view-password">••••••••••••</span>
+              <div class="detail-actions">
+                <button class="btn-icon" id="btn-view-toggle-pw" title="Reveal Password">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button class="btn-icon-copy" id="btn-copy-password" title="Copy Password">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="strength-meter-wrap" id="view-strength-meter">
+              <div class="meter-bar"><div class="meter-fill" style="width: 0%;"></div></div>
+              <div class="strength-info">
+                <span class="strength-text" id="view-strength-label">Strong</span>
+                <span class="strength-entropy" id="view-crack-time">Estimated crack time: Centuries</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- URL field -->
+          <div class="detail-field" id="field-view-url">
+            <div class="detail-label">Website URL</div>
+            <div class="detail-value-row">
+              <a href="#" target="_blank" rel="noopener noreferrer" class="detail-val link-text" id="view-url">-</a>
+              <button class="btn-icon-copy" id="btn-copy-url" title="Copy URL">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Notes field -->
+          <div class="detail-field" id="field-view-notes">
+            <div class="detail-label">Notes</div>
+            <div class="detail-notes-box" id="view-notes">-</div>
+          </div>
+
+          <!-- Timestamps -->
+          <div class="detail-timestamps">
+            <span id="view-created-at">Created: -</span>
+            <span id="view-updated-at">Modified: -</span>
+          </div>
+        </div>
+
+        <div class="view-item-footer">
+          <button class="btn btn-secondary" id="btn-edit-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            Edit
+          </button>
+          <button class="btn btn-danger-outline" id="btn-delete-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== MODAL: CHANGE MASTER PASSWORD ==================== -->
+    <div id="modal-change-pw" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="modal-sheet">
+        <div class="sheet-handle"></div>
+        <div class="modal-header">
+          <h3>Change Master Password</h3>
+          <button class="btn-icon" id="btn-close-change-pw">✕</button>
+        </div>
+        <form id="form-change-pw" class="modal-form" autocomplete="off">
+          <div class="form-group">
+            <label for="change-current-pw">Current Master Password</label>
+            <input type="password" id="change-current-pw" required autocomplete="current-password">
+          </div>
+          <div class="form-group">
+            <label for="change-new-pw">New Master Password (Min 8 chars)</label>
+            <input type="password" id="change-new-pw" required minlength="8" autocomplete="new-password">
+          </div>
+          <div class="form-group">
+            <label for="change-confirm-pw">Confirm New Password</label>
+            <input type="password" id="change-confirm-pw" required minlength="8" autocomplete="new-password">
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-change-pw">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-change-pw">Re-encrypt & Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ==================== MODAL: INSTALL PWA GUIDE ==================== -->
+    <div id="modal-install-guide" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="modal-sheet">
+        <div class="sheet-handle"></div>
+        <div class="modal-header">
+          <h3>📲 Install AegisVault App</h3>
+          <button class="btn-icon" id="btn-close-install-guide">✕</button>
+        </div>
+
+        <div style="padding: 10px 0;">
+          <div id="native-install-prompt-wrap" class="hidden" style="margin-bottom: 20px;">
+            <p style="margin-bottom: 12px; font-size: 14px;">Your browser supports 1-tap installation directly to your home screen or desktop:</p>
+            <button id="btn-trigger-native-install" class="btn btn-primary btn-block btn-lg">
+              Install AegisVault Now
+            </button>
+            <div style="height: 1px; background: var(--border-subtle); margin: 20px 0;"></div>
+          </div>
+
+          <div class="install-instructions">
+            <h4 style="color: var(--accent-cyan); margin-bottom: 8px;">📱 On iPhone / iPad (Safari):</h4>
+            <ol style="margin-left: 20px; font-size: 13px; color: var(--text-muted); line-height: 1.8;">
+              <li>Tap the <strong>Share</strong> button (square with arrow up) at the bottom.</li>
+              <li>Scroll down and tap <strong>"Add to Home Screen"</strong>.</li>
+              <li>Tap <strong>Add</strong> in the top right. AegisVault will install as a standalone app!</li>
+            </ol>
+
+            <h4 style="color: var(--accent-cyan); margin-top: 18px; margin-bottom: 8px;">🤖 On Android (Chrome / Brave / Edge):</h4>
+            <ol style="margin-left: 20px; font-size: 13px; color: var(--text-muted); line-height: 1.8;">
+              <li>Tap the <strong>Three Dots (⋮)</strong> menu in the top-right corner.</li>
+              <li>Select <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</li>
+              <li>Confirm install to add AegisVault to your app drawer and home screen.</li>
+            </ol>
+
+            <h4 style="color: var(--accent-cyan); margin-top: 18px; margin-bottom: 8px;">💻 On PC / Mac (Chrome / Edge / Brave):</h4>
+            <ol style="margin-left: 20px; font-size: 13px; color: var(--text-muted); line-height: 1.8;">
+              <li>Look at the right side of the address bar at the top of the browser.</li>
+              <li>Click the <strong>Install App icon (⊕ or computer icon)</strong>.</li>
+              <li>Or click the 3 dots menu -> <strong>Save and share -> Install AegisVault</strong>.</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="modal-actions" style="grid-template-columns: 1fr;">
+          <button type="button" class="btn btn-secondary btn-block" id="btn-dismiss-install-guide">Got It</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden File Input for Backup Import -->
+    <input type="file" id="file-import-input" accept=".vault,.json" class="hidden">
+
+  </div>
+
+  <script src="js/crypto.js"></script>
+  <script src="js/vault.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Register Service Worker for Offline PWA execution
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('AegisVault ServiceWorker registered:', reg.scope))
+          .catch(err => console.log('ServiceWorker registration error:', err));
+      });
+    }
+  </script>
+</body>
+</html>

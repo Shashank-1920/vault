@@ -1,0 +1,11 @@
+{
+  "name": "aegis-password-vault",
+  "version": "1.0.0",
+  "description": "Secure, zero-knowledge, offline-first mobile password vault PWA with AES-256-GCM encryption",
+  "scripts": {
+    "start": "npx serve -s . -l 3000"
+  },
+  "keywords": ["password-manager", "pwa", "crypto", "aes-256-gcm", "security", "vault"],
+  "author": "AegisVault",
+  "license": "MIT"
+}

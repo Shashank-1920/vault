@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0e17"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="cyan-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="16" flood-color="#06b6d4" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  
+  <!-- App Background Tile -->
+  <rect width="512" height="512" rx="112" fill="url(#bg-grad)"/>
+  <rect width="510" height="510" x="1" y="1" rx="111" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+
+  <!-- Shield Shape -->
+  <path d="M256 70 L390 120 V250 C390 340 330 410 256 442 C182 410 122 340 122 250 V120 Z" 
+        fill="rgba(6, 182, 212, 0.08)" 
+        stroke="url(#cyan-blue)" 
+        stroke-width="16" 
+        stroke-linejoin="round"
+        filter="url(#glow)"/>
+
+  <!-- Padlock Core -->
+  <rect x="206" y="235" width="100" height="85" rx="14" fill="url(#cyan-blue)"/>
+  <path d="M226 235 V195 C226 178 240 165 256 165 C272 165 286 178 286 195 V235" 
+        fill="none" 
+        stroke="#ffffff" 
+        stroke-width="14" 
+        stroke-linecap="round"/>
+  
+  <!-- Keyhole -->
+  <circle cx="256" cy="270" r="8" fill="#0a0e17"/>
+  <polygon points="253,272 259,272 261,290 251,290" fill="#0a0e17"/>
+</svg>
